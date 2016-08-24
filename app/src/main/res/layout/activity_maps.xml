@@ -26,5 +26,20 @@
         android:onClick="scanPressed"
         android:nestedScrollingEnabled="false"/>
 
+    <ImageButton
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:id="@+id/settingsButton"
+        android:layout_alignParentBottom="true"
+        android:layout_alignParentStart="true"
+        android:layout_alignParentEnd="false"
+        android:src="@drawable/settings_button"
+        android:layout_marginStart="5dp"
+        android:layout_marginBottom="5dp"
+        android:background="#0000"
+        android:minWidth="0dp"
+        android:minHeight="0dp"
+        android:onClick="settingsPressed"
+        android:nestedScrollingEnabled="false"/>
 
 </RelativeLayout>
