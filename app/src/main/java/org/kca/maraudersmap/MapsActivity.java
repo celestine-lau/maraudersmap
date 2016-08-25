@@ -79,7 +79,6 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         LocationListener,
         SharedPreferences.OnSharedPreferenceChangeListener
 {
-    //LatLng myLocation = new LatLng(1.291215, 103.788256);
     private static final String TAG = "MapsActivity";
     /** Arbitrary request ID for location permission request */
     private static final int LOCATION_PERMISSION_REQUEST_ID = 7;
@@ -122,7 +121,6 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     private SharedPreferences sharedPref;
     private int scanSize;
     private boolean scanRunning;
-    private String username, password;
     private String[] usernames, passwords;
 
     @Override
@@ -180,10 +178,6 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
      */
     private void loadFromPreferences(SharedPreferences pref)
     {
-        /*
-        username = pref.getString(getString(R.string.pref_username), "");
-        password = pref.getString(getString(R.string.pref_password), "");
-        */
         String usernamesList = pref.getString(getString(R.string.pref_usernames), "");
         String passwordsList = pref.getString(getString(R.string.pref_passwords), "");
         usernames = usernamesList.split(" ");
