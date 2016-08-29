@@ -33,4 +33,13 @@
         android:dialogTitle="Credentials"
         android:dialogMessage="Please enter credentials (up to 6) for login to Pokemon GO"
         />
+    <CheckBoxPreference
+        android:title="Show IV Values"
+        android:persistent="true"
+        android:defaultValue="false"
+        android:key="@string/pref_show_ivs"
+        android:summaryOn="@string/pref_show_ivs_on_summary"
+        android:summaryOff="@string/pref_show_ivs_off_summary"
+        />
+
 </PreferenceScreen>
