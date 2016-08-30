@@ -18,6 +18,9 @@
 
 package org.kca.maraudersmap;
 
+import android.app.AlertDialog;
+import android.content.Context;
+import android.content.DialogInterface;
 import android.app.PendingIntent;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -26,6 +29,7 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Color;
 import android.location.Location;
+import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.preference.PreferenceManager;
@@ -59,19 +63,28 @@ import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.pokegoapi.api.PokemonGo;
 import com.pokegoapi.api.map.pokemon.CatchablePokemon;
+import com.pokegoapi.api.map.pokemon.encounter.EncounterResult;
 import com.pokegoapi.auth.PtcCredentialProvider;
 import com.pokegoapi.exceptions.AsyncPokemonGoException;
 import com.pokegoapi.exceptions.LoginFailedException;
 import com.pokegoapi.exceptions.RemoteServerException;
 
+import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Scanner;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
+import POGOProtos.Data.PokemonDataOuterClass;
 import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.Response;
+import okhttp3.ResponseBody;
 
 public class MapsActivity extends FragmentActivity implements OnMapReadyCallback,
         ActivityCompat.OnRequestPermissionsResultCallback,
@@ -81,12 +94,13 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         SharedPreferences.OnSharedPreferenceChangeListener
 {
     private static final String TAG = "MapsActivity";
+    private static final Pattern GITHUB_RELEASE_REGEX = Pattern.compile("/tree/(.+?)\"");
     /** Arbitrary request ID for location permission request */
     private static final int LOCATION_PERMISSION_REQUEST_ID = 7;
     /** The fastest interval in ms between location updates */
-    private static final long DEFAULT_FASTEST_LOCATION_REQUEST_INTERVAL = 10000;
+    private static final long DEFAULT_FASTEST_LOCATION_REQUEST_INTERVAL = 8000;
     /** The standard interval in ms between location updates */
-    private static final long DEFAULT_LOCATION_REQUEST_INTERVAL = 15000;
+    private static final long DEFAULT_LOCATION_REQUEST_INTERVAL = 12000;
     private static final float DEFAULT_LAT = 1.255651f;
     private static final float DEFAULT_LNG = 103.822159f;
     /** Radius of a single scan, in km */
@@ -122,6 +136,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     private GoogleApiClient googleApiClient;
     private SharedPreferences sharedPref;
     private int scanSize;
+    private boolean showIvValues;
     private boolean scanRunning;
     private String[] usernames, passwords;
     private PendingIntent locationRequestPendingIntent;
@@ -149,19 +164,32 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         sharedPref = PreferenceManager.getDefaultSharedPreferences(this);
         init();
         loadFromPreferences(sharedPref);
+        sharedPref.registerOnSharedPreferenceChangeListener(this);
+        new CheckForUpdatesTask().execute();
     }
 
     @Override
     public void onResume()
     {
         super.onResume();
-        sharedPref.registerOnSharedPreferenceChangeListener(this);
+        registerLocationUpdates();
     }
 
     @Override
     public void onPause()
     {
         super.onPause();
+        if (googleApiClient.isConnected())
+        {
+            LocationServices.FusedLocationApi.removeLocationUpdates(googleApiClient, this);
+        }
+    }
+
+    @Override
+    public void onDestroy()
+    {
+        sharedPref.unregisterOnSharedPreferenceChangeListener(this);
+        super.onDestroy();
     }
 
     /**
@@ -184,12 +212,12 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         String passwordsList = pref.getString(getString(R.string.pref_passwords), "");
         usernames = usernamesList.split(" ");
         passwords = passwordsList.split(" ");
-
         scanSize = Integer.parseInt(pref.getString(getString(R.string.pref_scan_radius), "1"));
         if (locationCircle != null)
         {
             locationCircle.setRadius(getScanRadius(scanSize));
         }
+        showIvValues = pref.getBoolean(getString(R.string.pref_show_ivs), false);
     }
 
     /**
@@ -249,7 +277,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         {
             toggleScanButton(false);
             Toast.makeText(this, "Scan started", Toast.LENGTH_SHORT).show();
-            new ScanPokemonTask(scanSize).execute();
+            new ScanPokemonTask(scanSize, showIvValues).execute();
         }
     }
 
@@ -323,6 +351,21 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         locationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
         locationRequest.setFastestInterval((interval * 2) / 3);
         return locationRequest;
+    }
+
+    private void registerLocationUpdates()
+    {
+        if (googleApiClient.isConnected())
+        {
+            LocationRequest locationRequest = createLocationRequest();
+            try
+            {
+                LocationServices.FusedLocationApi.requestLocationUpdates(googleApiClient, locationRequest,
+                        this);
+            } catch (SecurityException e)
+            {
+            }
+        }
     }
 
     @Override
@@ -435,9 +478,11 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         private Set<CatchablePokemon> pokeSet;
         private List<LatLng> scanPoints;
         private List<Pair<String, String>> credentials;
+        private boolean showIvs;
 
-        public ScanPokemonTask(int scanSize)
+        public ScanPokemonTask(int scanSize, boolean showIvs)
         {
+            this.showIvs = showIvs;
             pokeSet = new HashSet<CatchablePokemon>();
             scanPoints = new ArrayList<LatLng>();
             double unit = SCAN_RADIUS / KM_PER_DEGREE;
@@ -491,7 +536,8 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                         Pair<String, String> credential = credentials.get(i);
                         PtcCredentialProvider ptcCredentialProvider =
                                 new PtcCredentialProvider(httpClient, credential.first, credential.second);
-                        go[i] = new PokemonGo(ptcCredentialProvider, httpClient);
+                        go[i] = new PokemonGo(httpClient);
+                        go[i].login(ptcCredentialProvider);
                     }
 
                     firstScan = false;
@@ -507,9 +553,19 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                     {
                         if (!pokeSet.contains(pokemon))
                         {
-                            pokeSet.add(pokemon);
+                            EncounterResult encounterResult = pokemon.encounterPokemon();
                             String markerText = pokemon.getPokemonId().toString() + " " +
                                     TIME_FORMAT.format(new Date(pokemon.getExpirationTimestampMs()));
+                            if (showIvs)
+                            {
+                                PokemonDataOuterClass.PokemonData pokemonData = encounterResult.getPokemonData();
+                                float ivPercent = (pokemonData.getIndividualAttack() +
+                                        pokemonData.getIndividualDefense() +
+                                        pokemonData.getIndividualStamina()) / 0.45f;
+                                markerText += String.format(" [IV:%d%%]", Math.round(ivPercent));
+                            }
+                            pokeSet.add(pokemon);
+
                             publishProgress(new MarkerParams(
                                     new LatLng(pokemon.getLatitude(), pokemon.getLongitude()),
                                     markerText, pokemon.getPokemonId().getNumber()));
@@ -601,6 +657,93 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
             this.position = position;
             this.text = text;
             this.type = type;
+        }
+    }
+
+    /**
+     * Checks for updates from Github.
+     * Thanks to javiersantos who provided a handy reference for the code at:
+     * https://github.com/javiersantos/AppUpdater.
+     */
+    private class CheckForUpdatesTask extends AsyncTask<Void, Void, Boolean>
+    {
+
+
+        @Override
+        protected Boolean doInBackground(Void... voids)
+        {
+            OkHttpClient httpClient = new OkHttpClient();
+            Request request = new Request.Builder()
+                    .url(getString(R.string.github_releases_url))
+                    .build();
+            ResponseBody body = null;
+            try
+            {
+                Response response = httpClient.newCall(request).execute();
+                body = response.body();
+                Scanner sc = new Scanner(body.byteStream(), "UTF-8");
+                String version = null;
+                while (sc.hasNextLine())
+                {
+                    String line = sc.nextLine();
+                    Matcher matcher = GITHUB_RELEASE_REGEX.matcher(line);
+                    if (matcher.find())
+                    {
+                        version = matcher.group(1);
+                        break;
+                    }
+                }
+                if (version != null)
+                {
+                    Context context = MapsActivity.this;
+                    try
+                    {
+                        String currentVersion = context.getPackageManager()
+                                .getPackageInfo(context.getPackageName(), 0).versionName;
+                        Log.d(TAG, "current version is " + currentVersion + " and online version is " + version);
+                        return !currentVersion.equals(version);
+                    }
+                    catch (PackageManager.NameNotFoundException e)
+                    {
+                        e.printStackTrace();
+                    }
+                }
+            }
+            catch (IOException e)
+            {
+
+            }
+            finally
+            {
+                body.close();
+            }
+
+            return true;
+        }
+
+        protected void onPostExecute(Boolean result)
+        {
+            if (result)
+            {
+                new AlertDialog.Builder(MapsActivity.this)
+                        .setTitle("Update available")
+                        .setIcon(android.R.drawable.ic_dialog_info)
+                        .setMessage("There is an update available for this app. Visit the download page now?")
+                        .setPositiveButton(android.R.string.ok, new DialogInterface.OnClickListener()
+                        {
+                            @Override
+                            public void onClick(DialogInterface dialogInterface, int i)
+                            {
+                                String url = MapsActivity.this.getString(R.string.github_releases_url);
+                                Intent intent = new Intent(Intent.ACTION_VIEW);
+                                intent.setData(Uri.parse(url));
+                                startActivity(intent);
+                            }
+                        })
+                        .setNegativeButton(android.R.string.no, null)
+                        .show();
+
+            }
         }
     }
 }
