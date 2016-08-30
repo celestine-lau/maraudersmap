@@ -97,9 +97,9 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     /** Arbitrary request ID for location permission request */
     private static final int LOCATION_PERMISSION_REQUEST_ID = 7;
     /** The fastest interval in ms between location updates */
-    private static final long DEFAULT_FASTEST_LOCATION_REQUEST_INTERVAL = 10000;
+    private static final long DEFAULT_FASTEST_LOCATION_REQUEST_INTERVAL = 8000;
     /** The standard interval in ms between location updates */
-    private static final long DEFAULT_LOCATION_REQUEST_INTERVAL = 15000;
+    private static final long DEFAULT_LOCATION_REQUEST_INTERVAL = 12000;
     private static final float DEFAULT_LAT = 1.255651f;
     private static final float DEFAULT_LNG = 103.822159f;
     /** Radius of a single scan, in km */
@@ -161,6 +161,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         sharedPref = PreferenceManager.getDefaultSharedPreferences(this);
         init();
         loadFromPreferences(sharedPref);
+        sharedPref.registerOnSharedPreferenceChangeListener(this);
         new CheckForUpdatesTask().execute();
     }
 
@@ -168,7 +169,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     public void onResume()
     {
         super.onResume();
-        sharedPref.registerOnSharedPreferenceChangeListener(this);
+        registerLocationUpdates();
     }
 
     @Override
