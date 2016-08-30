@@ -25,7 +25,7 @@ public class LocationReceiver extends BroadcastReceiver
             {
                 LocationResult locationResult = LocationResult.extractResult(intent);
                 Location location = locationResult.getLastLocation();
-                Log.d(TAG, "We are now at " + location);
+                
             }
         }
     }

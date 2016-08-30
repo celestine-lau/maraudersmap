@@ -8,8 +8,8 @@ android {
         applicationId "org.kca.maraudersmap"
         minSdkVersion 19
         targetSdkVersion 23
-        versionCode 3
-        versionName "v0.21-alpha"
+        versionCode 4
+        versionName "v0.3-alpha"
         multiDexEnabled true
     }
     buildTypes {

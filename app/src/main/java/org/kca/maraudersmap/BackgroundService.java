@@ -13,14 +13,11 @@ import android.content.Intent;
  */
 public class BackgroundService extends IntentService
 {
-    // TODO: Rename actions, choose action names that describe tasks that this
-    // IntentService can perform, e.g. ACTION_FETCH_NEW_ITEMS
-    private static final String ACTION_FOO = "org.kca.maraudersmap.action.FOO";
-    private static final String ACTION_BAZ = "org.kca.maraudersmap.action.BAZ";
+    /* Informs the service that the location has been updated */
+    private static final String ACTION_LOCATION_UPDATED = "org.kca.maraudersmap.action.LOCATION_UPDATED";
 
-    // TODO: Rename parameters
-    private static final String EXTRA_PARAM1 = "org.kca.maraudersmap.extra.PARAM1";
-    private static final String EXTRA_PARAM2 = "org.kca.maraudersmap.extra.PARAM2";
+    private static final String EXTRA_LATITUDE = "org.kca.maraudersmap.extra.LATITUDE";
+    private static final String EXTRA_LONGITUDE = "org.kca.maraudersmap.extra.LONGITUDE";
 
     public BackgroundService()
     {
@@ -28,34 +25,17 @@ public class BackgroundService extends IntentService
     }
 
     /**
-     * Starts this service to perform action Foo with the given parameters. If
+     * Starts this service to perform action LocationUpdated with the given parameters. If
      * the service is already performing a task this action will be queued.
      *
      * @see IntentService
      */
-    // TODO: Customize helper method
-    public static void startActionFoo(Context context, String param1, String param2)
+    public static void startActionLocationUpdated(Context context, double latitude, double longitude)
     {
         Intent intent = new Intent(context, BackgroundService.class);
-        intent.setAction(ACTION_FOO);
-        intent.putExtra(EXTRA_PARAM1, param1);
-        intent.putExtra(EXTRA_PARAM2, param2);
-        context.startService(intent);
-    }
-
-    /**
-     * Starts this service to perform action Baz with the given parameters. If
-     * the service is already performing a task this action will be queued.
-     *
-     * @see IntentService
-     */
-    // TODO: Customize helper method
-    public static void startActionBaz(Context context, String param1, String param2)
-    {
-        Intent intent = new Intent(context, BackgroundService.class);
-        intent.setAction(ACTION_BAZ);
-        intent.putExtra(EXTRA_PARAM1, param1);
-        intent.putExtra(EXTRA_PARAM2, param2);
+        intent.setAction(ACTION_LOCATION_UPDATED);
+        intent.putExtra(EXTRA_LATITUDE, latitude);
+        intent.putExtra(EXTRA_LONGITUDE, longitude);
         context.startService(intent);
     }
 
@@ -65,37 +45,24 @@ public class BackgroundService extends IntentService
         if (intent != null)
         {
             final String action = intent.getAction();
-            if (ACTION_FOO.equals(action))
+            if (ACTION_LOCATION_UPDATED.equals(action))
             {
-                final String param1 = intent.getStringExtra(EXTRA_PARAM1);
-                final String param2 = intent.getStringExtra(EXTRA_PARAM2);
-                handleActionFoo(param1, param2);
-            } else if (ACTION_BAZ.equals(action))
-            {
-                final String param1 = intent.getStringExtra(EXTRA_PARAM1);
-                final String param2 = intent.getStringExtra(EXTRA_PARAM2);
-                handleActionBaz(param1, param2);
+                final double latitude = intent.getDoubleExtra(EXTRA_LATITUDE, 0);
+                final double longitude = intent.getDoubleExtra(EXTRA_LONGITUDE, 0);
+                handleActionLocationUpdated(latitude, longitude);
             }
         }
     }
 
     /**
-     * Handle action Foo in the provided background thread with the provided
-     * parameters.
+     * Handle the location updated action
+     * @param latitude the updated latitude
+     * @param longitude the updated longitude
      */
-    private void handleActionFoo(String param1, String param2)
+    private void handleActionLocationUpdated(double latitude, double longitude)
     {
         // TODO: Handle action Foo
         throw new UnsupportedOperationException("Not yet implemented");
     }
 
-    /**
-     * Handle action Baz in the provided background thread with the provided
-     * parameters.
-     */
-    private void handleActionBaz(String param1, String param2)
-    {
-        // TODO: Handle action Baz
-        throw new UnsupportedOperationException("Not yet implemented");
-    }
 }

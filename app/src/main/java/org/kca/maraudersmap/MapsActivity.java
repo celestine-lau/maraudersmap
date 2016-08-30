@@ -19,9 +19,9 @@
 package org.kca.maraudersmap;
 
 import android.app.AlertDialog;
+import android.app.PendingIntent;
 import android.content.Context;
 import android.content.DialogInterface;
-import android.app.PendingIntent;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
@@ -185,13 +185,6 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         }
     }
 
-    @Override
-    public void onDestroy()
-    {
-        sharedPref.unregisterOnSharedPreferenceChangeListener(this);
-        super.onDestroy();
-    }
-
     /**
      * Initializes basic parameters for the activity.
      */
@@ -323,10 +316,8 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         }
         else
         {
-            LocationRequest activeLocationRequest = createLocationRequest(DEFAULT_LOCATION_REQUEST_INTERVAL);
             mMap.setMyLocationEnabled(true);
-            LocationServices.FusedLocationApi.requestLocationUpdates(googleApiClient, activeLocationRequest,
-                    this);
+            registerLocationUpdates();
             processBackgroundLocationScan();
         }
     }
@@ -357,7 +348,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     {
         if (googleApiClient.isConnected())
         {
-            LocationRequest locationRequest = createLocationRequest();
+            LocationRequest locationRequest = createLocationRequest(DEFAULT_LOCATION_REQUEST_INTERVAL);
             try
             {
                 LocationServices.FusedLocationApi.requestLocationUpdates(googleApiClient, locationRequest,
