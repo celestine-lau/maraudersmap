@@ -1,0 +1,11 @@
+v0.21-alpha (30/08/2016)
+- Bugfix for #2 (Location updating stops when exiting out of app)
+
+v0.2-alpha:
+- Option to show IV values on map markers
+- Reduce background power consumption / data usage
+
+v0.1-alpha:
+Basic scanning functionality
+- Multi-account scanning (up to 6)
+- Configurable radius
