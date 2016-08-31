@@ -1,3 +1,7 @@
+v0.22-alpha (31/08/2016)
+- Bugfix for #5 (App crashes on Android 4.4.2)
+- Support Samsung multi-window mode
+
 v0.21-alpha (30/08/2016)
 - Bugfix for #2 (Location updating stops when exiting out of app)
 
