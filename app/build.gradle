@@ -8,8 +8,8 @@ android {
         applicationId "org.kca.maraudersmap"
         minSdkVersion 19
         targetSdkVersion 23
-        versionCode 3
-        versionName "v0.21-alpha"
+        versionCode 4
+        versionName "v0.22-alpha"
         multiDexEnabled true
     }
     buildTypes {
@@ -27,4 +27,5 @@ dependencies {
     compile 'com.google.android.gms:play-services-maps:9.4.0'
     compile 'com.google.android.gms:play-services-location:9.4.0'
     compile 'com.android.support:support-v4:23.4.0'
+    compile 'com.android.support:multidex:1.0.0'
 }

@@ -1,23 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
-    <!--
-    <EditTextPreference
-        android:title="Username"
-        android:defaultValue="mewtree1551"
-        android:key="@string/pref_username"
-        android:summary="The PTC username used for login to Pokemon GO"
-        android:dialogTitle="Username"
-        android:dialogMessage="Enter PTC username"
-        />
-    <EditTextPreference
-        android:title="Password"
-        android:defaultValue="defghijk"
-        android:key="@string/pref_password"
-        android:summary="The PTC password used for login to Pokemon GO"
-        android:inputType="textPassword"
-        android:dialogTitle="Password"
-        android:dialogMessage="Enter PTC password"
-        />-->
+
     <ListPreference
         android:title="Scan Radius"
         android:persistent="true"

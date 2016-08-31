@@ -242,8 +242,6 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         mMap = googleMap;
         float lastLat = sharedPref.getFloat(getString(R.string.pref_last_lat), DEFAULT_LAT);
         float lastLng = sharedPref.getFloat(getString(R.string.pref_last_lng), DEFAULT_LNG);
-        //float lastLat = DEFAULT_LAT;
-        //float lastLng = DEFAULT_LNG;
         myLocation = new LatLng(lastLat, lastLng);
         CameraPosition cameraPos = CameraPosition.builder()
                 .target(myLocation)
