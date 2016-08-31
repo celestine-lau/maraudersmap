@@ -19,6 +19,7 @@
 package org.kca.maraudersmap;
 
 import android.app.AlertDialog;
+import android.app.PendingIntent;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
@@ -118,6 +119,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
             {1.7, 6},
             {3.4, 12}
     };
+    private static final int LOCATION_REQUEST_ID = 20056;
 
     private SimpleDateFormat TIME_FORMAT = new SimpleDateFormat("HH:mm:ss");
     private List<Marker> markersOnMap;
@@ -137,6 +139,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     private boolean showIvValues;
     private boolean scanRunning;
     private String[] usernames, passwords;
+    private PendingIntent locationRequestPendingIntent;
 
     @Override
     protected void onCreate(Bundle savedInstanceState)
@@ -180,13 +183,6 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         {
             LocationServices.FusedLocationApi.removeLocationUpdates(googleApiClient, this);
         }
-    }
-
-    @Override
-    public void onDestroy()
-    {
-        sharedPref.unregisterOnSharedPreferenceChangeListener(this);
-        super.onDestroy();
     }
 
     /**
@@ -320,19 +316,29 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         {
             mMap.setMyLocationEnabled(true);
             registerLocationUpdates();
+            processBackgroundLocationScan();
         }
+    }
+
+    @Override
+    public void onDestroy()
+    {
+        super.onDestroy();
+        sharedPref.unregisterOnSharedPreferenceChangeListener(this);
+        LocationServices.FusedLocationApi.removeLocationUpdates(googleApiClient, this);
     }
 
     /**
      * Creates the location request for the fused location API to request location updates
+     * @param interval the normal interval between location updates in ms
      * @return the location request object
      */
-    private LocationRequest createLocationRequest()
+    private LocationRequest createLocationRequest(long interval)
     {
         LocationRequest locationRequest = new LocationRequest();
-        locationRequest.setInterval(DEFAULT_LOCATION_REQUEST_INTERVAL);
+        locationRequest.setInterval(interval);
         locationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
-        locationRequest.setFastestInterval(DEFAULT_FASTEST_LOCATION_REQUEST_INTERVAL);
+        locationRequest.setFastestInterval((interval * 2) / 3);
         return locationRequest;
     }
 
@@ -340,7 +346,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     {
         if (googleApiClient.isConnected())
         {
-            LocationRequest locationRequest = createLocationRequest();
+            LocationRequest locationRequest = createLocationRequest(DEFAULT_LOCATION_REQUEST_INTERVAL);
             try
             {
                 LocationServices.FusedLocationApi.requestLocationUpdates(googleApiClient, locationRequest,
@@ -385,6 +391,44 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         locationCircle.setCenter(myLocation);
     }
 
+    private void processBackgroundLocationScan()
+    {
+        if (sharedPref.getBoolean(getString(R.string.pref_background_scan), false))
+        {
+            int scanFrequency = Integer.parseInt(sharedPref.getString(getString(R.string.pref_scan_frequency),
+                    getResources().getString(R.string.pref_scan_frequency_default)));
+            LocationRequest backgroundLocationRequest = createLocationRequest(scanFrequency * 60000);
+            Intent intent = new Intent(this, LocationReceiver.class);
+            intent.setAction(getString(R.string.action_location_update));
+            if (locationRequestPendingIntent != null)
+            {
+                LocationServices.FusedLocationApi.removeLocationUpdates(googleApiClient, locationRequestPendingIntent);
+            }
+            locationRequestPendingIntent = PendingIntent.getBroadcast(this, LOCATION_REQUEST_ID,
+                    intent, PendingIntent.FLAG_CANCEL_CURRENT);
+            try
+            {
+                LocationServices.FusedLocationApi.requestLocationUpdates(googleApiClient, backgroundLocationRequest,
+                        locationRequestPendingIntent);
+                Log.d("LocationReceiver", "requested location updates at " + scanFrequency + " min intervals");
+            }
+            catch (SecurityException e)
+            {
+
+            }
+        }
+        else
+        {
+            if (locationRequestPendingIntent != null)
+            {
+                Log.d("LocationReceiver", "Cancelled location updates");
+                LocationServices.FusedLocationApi.removeLocationUpdates(googleApiClient, locationRequestPendingIntent);
+                locationRequestPendingIntent = null;
+            }
+        }
+    }
+
+
     @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults)
     {
@@ -393,15 +437,25 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
             if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_COARSE_LOCATION ) ==
                     PackageManager.PERMISSION_GRANTED)
             {
-                registerLocationUpdates();
+                LocationRequest activeLocationRequest = createLocationRequest(DEFAULT_LOCATION_REQUEST_INTERVAL);
+                mMap.setMyLocationEnabled(true);
+                LocationServices.FusedLocationApi.requestLocationUpdates(googleApiClient, activeLocationRequest,
+                        this);
+                processBackgroundLocationScan();
             }
         }
     }
 
     @Override
-    public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, String s)
+    public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, String key)
     {
         loadFromPreferences(sharedPreferences);
+        Log.d(TAG, key + " preference changed ");
+        if (key.equals(getString(R.string.pref_scan_frequency))
+                || key.equals(getString(R.string.pref_background_scan)))
+        {
+            processBackgroundLocationScan();
+        }
     }
 
     /**
