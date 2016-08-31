@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <item name="app_defaultsize_w" type="dimen" format="float">320.0</item>
+    <item name="app_defaultsize_h" type="dimen" format="float">480.0</item>
+    <item name="app_minimumsize_w" type="dimen" format="float">240.0</item>
+    <item name="app_minimumsize_h" type="dimen" format="float">360.0</item>
+</resources>

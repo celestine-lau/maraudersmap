@@ -119,7 +119,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
             {3.4, 12}
     };
 
-    private SimpleDateFormat TIME_FORMAT = new SimpleDateFormat("kk:mm:ss");
+    private SimpleDateFormat TIME_FORMAT = new SimpleDateFormat("HH:mm:ss");
     private List<Marker> markersOnMap;
     private LatLng myLocation = new LatLng(DEFAULT_LAT, DEFAULT_LNG);
 
