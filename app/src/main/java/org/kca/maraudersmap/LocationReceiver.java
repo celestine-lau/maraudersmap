@@ -20,9 +20,9 @@ public class LocationReceiver extends BroadcastReceiver
     {
         if (context.getString(R.string.action_location_update).equals(intent.getAction()))
         {
-            Log.d(TAG, "Location update received");
             if (LocationResult.hasResult(intent))
             {
+                Log.d(TAG, "Location update received");
                 LocationResult locationResult = LocationResult.extractResult(intent);
                 Location location = locationResult.getLastLocation();
                 BackgroundService.startActionLocationUpdated(context, location.getLatitude(), location.getLongitude());
