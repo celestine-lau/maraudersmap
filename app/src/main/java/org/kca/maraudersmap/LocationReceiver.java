@@ -25,7 +25,7 @@ public class LocationReceiver extends BroadcastReceiver
             {
                 LocationResult locationResult = LocationResult.extractResult(intent);
                 Location location = locationResult.getLastLocation();
-                
+                BackgroundService.startActionLocationUpdated(context, location.getLatitude(), location.getLongitude());
             }
         }
     }

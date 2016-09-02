@@ -34,6 +34,22 @@
         <item>45</item>
         <item>60</item>
     </string-array>
+    <string-array name="pref_pokemon_rarity_entries">
+        <item>Very common</item>
+        <item>Common</item>
+        <item>Uncommon</item>
+        <item>Rare</item>
+        <item>Epic</item>
+        <item>Legendary</item>
+    </string-array>
+    <string-array name="pref_pokemon_rarity_values">
+        <item>1</item>
+        <item>2</item>
+        <item>3</item>
+        <item>4</item>
+        <item>5</item>
+        <item>6</item>
+    </string-array>
     <integer-array name="pokemon_resource_ids">
         <item>@drawable/p001</item>
         <item>@drawable/p002</item>
@@ -185,5 +201,159 @@
         <item>@drawable/p148</item>
         <item>@drawable/p149</item>
         <item>@drawable/p150</item>
+    </integer-array>
+    <integer-array name="pokemon_rarities">
+        <item>0</item> <!-- Placeholder for #0 -->
+        <item>2</item> <!-- Bulbasaur -->
+        <item>3</item> <!-- Ivysaur -->
+        <item>5</item> <!-- Venusaur -->
+        <item>2</item> <!-- Charmander -->
+        <item>3</item> <!-- Charmeleon -->
+        <item>5</item> <!-- Charizard -->
+        <item>2</item> <!-- Squirtle -->
+        <item>3</item> <!-- Wartortle -->
+        <item>5</item> <!-- Blastoise -->
+        <item>1</item> <!-- Caterpie -->
+        <item>1</item> <!-- Metapod -->
+        <item>4</item> <!-- Butterfree -->
+        <item>1</item> <!-- Weedle -->
+        <item>1</item> <!-- Kakuna -->
+        <item>4</item> <!-- Beedrill -->
+        <item>1</item> <!-- Pidgey -->
+        <item>1</item> <!-- Pidgeotto -->
+        <item>3</item> <!-- Pidgeot -->
+        <item>1</item> <!-- Rattata -->
+        <item>1</item> <!-- Raticate -->
+        <item>1</item> <!-- Spearow -->
+        <item>3</item> <!-- Fearow -->
+        <item>1</item> <!-- Ekans -->
+        <item>3</item> <!-- Arbok -->
+        <item>3</item> <!-- Pikachu -->
+        <item>5</item> <!-- Raichu -->
+        <item>1</item> <!-- Sandshrew -->
+        <item>2</item> <!-- Sandslash -->
+        <item>1</item> <!-- Nidoran F -->
+        <item>2</item> <!-- Nidorina -->
+        <item>5</item> <!-- Nidoqueen -->
+        <item>1</item> <!-- Nidoran M -->
+        <item>2</item> <!-- Nidorino -->
+        <item>5</item> <!-- Nidoking -->
+        <item>2</item> <!-- Clefairy -->
+        <item>4</item> <!-- Clefable -->
+        <item>2</item> <!-- Vulpix -->
+        <item>4</item> <!-- Ninetales -->
+        <item>2</item> <!-- Jigglypuff -->
+        <item>4</item> <!-- Wigglytuff -->
+        <item>1</item> <!-- Zubat -->
+        <item>1</item> <!-- Golbat -->
+        <item>1</item> <!-- Oddish -->
+        <item>3</item> <!-- Gloom -->
+        <item>5</item> <!-- Vileplume -->
+        <item>1</item> <!-- Paras -->
+        <item>4</item> <!-- Parasect -->
+        <item>1</item> <!-- Venonat -->
+        <item>4</item> <!-- Venomoth -->
+        <item>1</item> <!-- Diglett -->
+        <item>4</item> <!-- Dugtrio -->
+        <item>1</item> <!-- Meowth -->
+        <item>4</item> <!-- Persian -->
+        <item>1</item> <!-- Psyduck -->
+        <item>3</item> <!-- Golduck -->
+        <item>2</item> <!-- Mankey -->
+        <item>4</item> <!-- Primeape -->
+        <item>2</item> <!-- Growlithe -->
+        <item>4</item> <!-- Arcanine -->
+        <item>1</item> <!-- Poliwag -->
+        <item>1</item> <!-- Poliwhirl -->
+        <item>5</item> <!-- Poliwrath -->
+        <item>2</item> <!-- Abra -->
+        <item>3</item> <!-- Kadabra -->
+        <item>5</item> <!-- Alakazam -->
+        <item>2</item> <!-- Machop -->
+        <item>3</item> <!-- Machoke -->
+        <item>5</item> <!-- Machamp -->
+        <item>1</item> <!-- Bellsprout -->
+        <item>2</item> <!-- Weepinbell -->
+        <item>5</item> <!-- Victreebel -->
+        <item>1</item> <!-- Tentacool -->
+        <item>1</item> <!-- Tentacruel -->
+        <item>1</item> <!-- Geodude -->
+        <item>3</item> <!-- Graveler -->
+        <item>5</item> <!-- Golem -->
+        <item>2</item> <!-- Ponyta -->
+        <item>5</item> <!-- Rapidash -->
+        <item>1</item> <!-- Slowpoke -->
+        <item>4</item> <!-- Slowbro -->
+        <item>1</item> <!-- Magnemite -->
+        <item>4</item> <!-- Magneton -->
+        <item>6</item> <!-- Farfetch'd -->
+        <item>1</item> <!-- Doduo -->
+        <item>1</item> <!-- Dodrio -->
+        <item>2</item> <!-- Seel -->
+        <item>4</item> <!-- Dewgong -->
+        <item>2</item> <!-- Grimer -->
+        <item>5</item> <!-- Muk -->
+        <item>2</item> <!-- Shellder -->
+        <item>5</item> <!-- Cloyster -->
+        <item>1</item> <!-- Gastly -->
+        <item>3</item> <!-- Haunter -->
+        <item>5</item> <!-- Gengar -->
+        <item>5</item> <!-- Onix -->
+        <item>2</item> <!-- Drowzee -->
+        <item>5</item> <!-- Hypno -->
+        <item>1</item> <!-- Krabby -->
+        <item>3</item> <!-- Kingler -->
+        <item>1</item> <!-- Voltorb -->
+        <item>4</item> <!-- Electrode -->
+        <item>2</item> <!-- Exeggcute -->
+        <item>5</item> <!-- Exeggutor -->
+        <item>1</item> <!-- Cubone -->
+        <item>5</item> <!-- Marowak -->
+        <item>5</item> <!-- Hitmonlee -->
+        <item>5</item> <!-- Hitmonchan -->
+        <item>5</item> <!-- Lickitung -->
+        <item>1</item> <!-- Koffing -->
+        <item>3</item> <!-- Weezing -->
+        <item>2</item> <!-- Rhyhorn -->
+        <item>4</item> <!-- Rhydon -->
+        <item>5</item> <!-- Chansey -->
+        <item>1</item> <!-- Tangela -->
+        <item>6</item> <!-- Kangashkan -->
+        <item>1</item> <!-- Horsea -->
+        <item>3</item> <!-- Seadra -->
+        <item>1</item> <!-- Goldeen -->
+        <item>3</item> <!-- Seaking -->
+        <item>1</item> <!-- Staryu -->
+        <item>3</item> <!-- Starmie -->
+        <item>6</item> <!-- Mr. Mime -->
+        <item>3</item> <!-- Scyther -->
+        <item>4</item> <!-- Jynx -->
+        <item>5</item> <!-- Electabuzz -->
+        <item>4</item> <!-- Magmar -->
+        <item>1</item> <!-- Pinsir -->
+        <item>6</item> <!-- Tauros -->
+        <item>1</item> <!-- Magikarp -->
+        <item>5</item> <!-- Gyarados -->
+        <item>6</item> <!-- Lapras -->
+        <item>6</item> <!-- Ditto -->
+        <item>2</item> <!-- Eevee -->
+        <item>5</item> <!-- Vaporeon -->
+        <item>5</item> <!-- Jolteon -->
+        <item>5</item> <!-- Flareon -->
+        <item>5</item> <!-- Porygon -->
+        <item>3</item> <!-- Omanyte -->
+        <item>4</item> <!-- Omastar -->
+        <item>3</item> <!-- Kabuto -->
+        <item>4</item> <!-- Kabutops -->
+        <item>6</item> <!-- Aerodactyl -->
+        <item>6</item> <!-- Snorlax -->
+        <item>6</item> <!-- Articuno -->
+        <item>6</item> <!-- Zapdos -->
+        <item>6</item> <!-- Moltres -->
+        <item>2</item> <!-- Dratini -->
+        <item>4</item> <!-- Dragonair -->
+        <item>6</item> <!-- Dragonite -->
+        <item>6</item> <!-- Mewtwo -->
+        <item>6</item> <!-- Mew -->
     </integer-array>
 </resources>

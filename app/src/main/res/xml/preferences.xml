@@ -42,4 +42,13 @@
         android:entries="@array/pref_scan_frequency_entries"
         android:entryValues="@array/pref_scan_frequency_values"
         />
+    <ListPreference
+        android:title="Rarity Level to Notify"
+        android:persistent="true"
+        android:defaultValue="@string/pref_notify_pokemon_rarity_default"
+        android:key="@string/pref_notify_pokemon_rarity"
+        android:dialogTitle="Rarity Level to Notify"
+        android:entries="@array/pref_pokemon_rarity_entries"
+        android:entryValues="@array/pref_pokemon_rarity_values"
+        />
 </PreferenceScreen>
