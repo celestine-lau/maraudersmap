@@ -19,9 +19,12 @@
 package org.kca.maraudersmap;
 
 import android.app.AlertDialog;
+import android.app.PendingIntent;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.ServiceConnection;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
@@ -31,6 +34,7 @@ import android.location.Location;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
+import android.os.IBinder;
 import android.preference.PreferenceManager;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
@@ -90,7 +94,9 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         GoogleApiClient.OnConnectionFailedListener,
         GoogleApiClient.ConnectionCallbacks,
         LocationListener,
-        SharedPreferences.OnSharedPreferenceChangeListener
+        SharedPreferences.OnSharedPreferenceChangeListener,
+        ScanListener,
+        ServiceConnection
 {
     private static final String TAG = "MapsActivity";
     private static final Pattern GITHUB_RELEASE_REGEX = Pattern.compile("/tree/(.+?)\"");
@@ -118,6 +124,8 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
             {1.7, 6},
             {3.4, 12}
     };
+    private static final int LOCATION_REQUEST_ID = 20056;
+    public static final String EXTRA_SCAN_RESULT = "org.kca.maraudersmap.extra.SCAN_RESULT";
 
     private SimpleDateFormat TIME_FORMAT = new SimpleDateFormat("HH:mm:ss");
     private List<Marker> markersOnMap;
@@ -125,8 +133,6 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
     /** The large circle indicating the range of the scan */
     private Circle locationCircle;
-    /** The small circle indicating the center of the range of the scan */
-    private Circle locationCircleCenter;
     private GoogleMap mMap;
     private boolean firstScan;
     private OkHttpClient httpClient;
@@ -136,7 +142,11 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     private int scanSize;
     private boolean showIvValues;
     private boolean scanRunning;
+    private ScanResult backgroundScanResult;
     private String[] usernames, passwords;
+    private PendingIntent locationRequestPendingIntent;
+    private BackgroundService backgroundService;
+    private CheckForUpdatesTask checkForUpdatesTask;
 
     @Override
     protected void onCreate(Bundle savedInstanceState)
@@ -162,14 +172,33 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         init();
         loadFromPreferences(sharedPref);
         sharedPref.registerOnSharedPreferenceChangeListener(this);
-        new CheckForUpdatesTask().execute();
+        Intent startIntent = getIntent();
+        if (startIntent.hasExtra(EXTRA_SCAN_RESULT))
+        {
+            backgroundScanResult = (ScanResult)startIntent.getParcelableExtra(EXTRA_SCAN_RESULT);
+        }
+        else
+        {
+            /* Don't check for updates */
+            checkForUpdatesTask = new CheckForUpdatesTask();
+            checkForUpdatesTask.execute();
+        }
+    }
+
+    @Override
+    protected void onStart()
+    {
+        super.onStart();
+        // Bind to background service
+        Intent serviceIntent = new Intent(this, BackgroundService.class);
+        bindService(serviceIntent, this, BIND_AUTO_CREATE);
     }
 
     @Override
     public void onResume()
     {
         super.onResume();
-        registerLocationUpdates();
+        registerForegroundLocationUpdates();
     }
 
     @Override
@@ -185,8 +214,13 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     @Override
     public void onDestroy()
     {
-        sharedPref.unregisterOnSharedPreferenceChangeListener(this);
         super.onDestroy();
+        if (checkForUpdatesTask != null)
+        {
+            checkForUpdatesTask.cancel(true);
+        }
+        unbindService(this);
+        sharedPref.unregisterOnSharedPreferenceChangeListener(this);
     }
 
     /**
@@ -218,16 +252,6 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     }
 
     /**
-     * Gets the radius of the scan, based on the scanSize preference
-     * @param scanSize the scanSize preference
-     * @return the radius of the scan, in meters
-     */
-    private double getScanRadius(int scanSize)
-    {
-        return SCAN_RADIUS * 1000 * (SCAN_PARAMETERS[scanSize][0] + 1);
-    }
-
-    /**
      * Manipulates the map once available.
      * This callback is triggered when the map is ready to be used.
      * This is where we can add markers or lines, add listeners or move the camera. In this case,
@@ -256,6 +280,11 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                 .strokeColor(Color.RED)
                 .visible(true);
         locationCircle = mMap.addCircle(copt);
+        if (backgroundScanResult != null)
+        {
+            onScanResult(backgroundScanResult);
+            backgroundScanResult = null;
+        }
     }
 
     /**
@@ -270,9 +299,31 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         }
         else
         {
-            toggleScanButton(false);
-            Toast.makeText(this, "Scan started", Toast.LENGTH_SHORT).show();
-            new ScanPokemonTask(scanSize, showIvValues).execute();
+            for (Marker marker : markersOnMap)
+            {
+                marker.remove();
+            }
+            try
+            {
+                Location location = LocationServices.FusedLocationApi.getLastLocation(googleApiClient);
+                myLocation = new LatLng(location.getLatitude(), location.getLongitude());
+                updateLocationCircles();
+                if (backgroundService != null)
+                {
+                    toggleScanButton(false);
+                    Toast.makeText(this, "Scan started", Toast.LENGTH_SHORT).show();
+                    backgroundService.foregroundScan(location.getLatitude(), location.getLongitude(), this);
+                }
+                else
+                {
+                    Toast.makeText(this, "Background service not running", Toast.LENGTH_SHORT).show();
+                }
+            }
+            catch (SecurityException e)
+            {
+
+            }
+
         }
     }
 
@@ -296,7 +347,6 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         }
     }
 
-
     /**
      * Called when settings button is pressed
      * @param v the view that triggered this function
@@ -313,34 +363,23 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         if ( ContextCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_COARSE_LOCATION ) !=
                 PackageManager.PERMISSION_GRANTED ) {
 
-            ActivityCompat.requestPermissions( this, new String[] {  android.Manifest.permission.ACCESS_COARSE_LOCATION  },
+            ActivityCompat.requestPermissions(this,
+                    new String[]{android.Manifest.permission.ACCESS_FINE_LOCATION},
                     LOCATION_PERMISSION_REQUEST_ID);
         }
         else
         {
             mMap.setMyLocationEnabled(true);
-            registerLocationUpdates();
+            registerForegroundLocationUpdates();
+            processBackgroundLocationScan();
         }
     }
 
-    /**
-     * Creates the location request for the fused location API to request location updates
-     * @return the location request object
-     */
-    private LocationRequest createLocationRequest()
-    {
-        LocationRequest locationRequest = new LocationRequest();
-        locationRequest.setInterval(DEFAULT_LOCATION_REQUEST_INTERVAL);
-        locationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
-        locationRequest.setFastestInterval(DEFAULT_FASTEST_LOCATION_REQUEST_INTERVAL);
-        return locationRequest;
-    }
-
-    private void registerLocationUpdates()
+    private void registerForegroundLocationUpdates()
     {
         if (googleApiClient.isConnected())
         {
-            LocationRequest locationRequest = createLocationRequest();
+            LocationRequest locationRequest = createLocationRequest(DEFAULT_LOCATION_REQUEST_INTERVAL);
             try
             {
                 LocationServices.FusedLocationApi.requestLocationUpdates(googleApiClient, locationRequest,
@@ -385,214 +424,131 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         locationCircle.setCenter(myLocation);
     }
 
+    private void processBackgroundLocationScan()
+    {
+        if (sharedPref.getBoolean(getString(R.string.pref_background_scan), false))
+        {
+            int scanFrequency = Integer.parseInt(sharedPref.getString(getString(R.string.pref_scan_frequency),
+                    getResources().getString(R.string.pref_scan_frequency_default)));
+            LocationRequest backgroundLocationRequest = createLocationRequest(scanFrequency * 60000);
+            Intent intent = new Intent(this, LocationReceiver.class);
+            intent.setAction(getString(R.string.action_location_update));
+            if (locationRequestPendingIntent != null)
+            {
+                Log.d("LocationReceiver", "Cancelling existing location updates");
+                LocationServices.FusedLocationApi.removeLocationUpdates(googleApiClient, locationRequestPendingIntent);
+            }
+            locationRequestPendingIntent = PendingIntent.getBroadcast(this, LOCATION_REQUEST_ID,
+                    intent, PendingIntent.FLAG_UPDATE_CURRENT);
+            try
+            {
+                LocationServices.FusedLocationApi.requestLocationUpdates(googleApiClient, backgroundLocationRequest,
+                        locationRequestPendingIntent);
+                Log.d("LocationReceiver", "requested location updates at " + scanFrequency + " min intervals");
+            }
+            catch (SecurityException e)
+            {
+
+            }
+        }
+        else
+        {
+            if (locationRequestPendingIntent != null)
+            {
+                Log.d("LocationReceiver", "Cancelled location updates");
+                LocationServices.FusedLocationApi.removeLocationUpdates(googleApiClient, locationRequestPendingIntent);
+                locationRequestPendingIntent = null;
+            }
+        }
+    }
+
+
     @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults)
     {
         if (requestCode == LOCATION_PERMISSION_REQUEST_ID)
         {
-            if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_COARSE_LOCATION ) ==
+            if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_FINE_LOCATION ) ==
                     PackageManager.PERMISSION_GRANTED)
             {
-                registerLocationUpdates();
+                LocationRequest activeLocationRequest = createLocationRequest(DEFAULT_LOCATION_REQUEST_INTERVAL);
+                mMap.setMyLocationEnabled(true);
+                LocationServices.FusedLocationApi.requestLocationUpdates(googleApiClient, activeLocationRequest,
+                        this);
+                processBackgroundLocationScan();
+            }
+            else
+            {
+                Toast.makeText(this, "Marauders map requires location permissions to run.", Toast.LENGTH_SHORT).show();
+                finish();
             }
         }
     }
 
     @Override
-    public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, String s)
+    public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, String key)
     {
         loadFromPreferences(sharedPreferences);
-    }
-
-    /**
-     * This task scans for pokemon in the vicinity and updates the map with the markers
-     * corresponding to each pokemon.
-     */
-    private class ScanPokemonTask extends AsyncTask<Void, MarkerParams, Boolean>
-    {
-        private Set<CatchablePokemon> pokeSet;
-        private List<LatLng> scanPoints;
-        private List<Pair<String, String>> credentials;
-        private boolean showIvs;
-
-        public ScanPokemonTask(int scanSize, boolean showIvs)
+        if (key.equals(getString(R.string.pref_scan_frequency))
+                || key.equals(getString(R.string.pref_background_scan)))
         {
-            this.showIvs = showIvs;
-            pokeSet = new HashSet<CatchablePokemon>();
-            scanPoints = new ArrayList<LatLng>();
-            double unit = SCAN_RADIUS / KM_PER_DEGREE;
-            for (int i = 0; i <= scanSize; i++)
-            {
-                double angle = 2*Math.PI / SCAN_PARAMETERS[i][1];
-                for (int j = 0; j < SCAN_PARAMETERS[i][1]; j++)
-                {
-                    double resultant = j*angle;
-                    double lat = myLocation.latitude + Math.cos(resultant) * unit * SCAN_PARAMETERS[i][0];
-                    double lng = myLocation.longitude + Math.sin(resultant) * unit * SCAN_PARAMETERS[i][0];
-                    scanPoints.add(new LatLng(lat, lng));
-                }
-            }
-            credentials = new ArrayList<Pair<String, String>>();
-        }
-
-        @Override
-        protected void onPreExecute()
-        {
-            for (Marker marker : markersOnMap)
-            {
-                marker.remove();
-            }
-            for (int i = 0; i < Math.min(usernames.length, passwords.length); i++)
-            {
-                credentials.add(new Pair<String, String>(usernames[i], passwords[i]));
-            }
-        }
-
-        @Override
-        protected Boolean doInBackground(Void... voids)
-        {
-            /** The credentials specified in preferences are rotated during the scan in a round
-             * robin fashion. The program pauses for 10.5 secs after each rotation of credentials
-             * as there appears to be approximately 10 secs delay on updating of catchable pokemon
-             * on the Pokemon GO servers.
-             */
-            if (credentials.size() == 0)
-            {
-                return false;
-            }
-            try
-            {
-                if (firstScan)
-                {
-                    httpClient = new OkHttpClient();
-                    go = new PokemonGo[credentials.size()];
-                    for (int i = 0; i < credentials.size(); i++)
-                    {
-                        Pair<String, String> credential = credentials.get(i);
-                        PtcCredentialProvider ptcCredentialProvider =
-                                new PtcCredentialProvider(httpClient, credential.first, credential.second);
-                        go[i] = new PokemonGo(httpClient);
-                        go[i].login(ptcCredentialProvider);
-                    }
-
-                    firstScan = false;
-                }
-                for (int i = 0; i < scanPoints.size(); i++)
-                {
-                    LatLng location = scanPoints.get(i);
-                    int credentialIndex = i % credentials.size();
-                    go[credentialIndex].setLocation(location.latitude, location.longitude, 20);
-                    List<CatchablePokemon> list = go[credentialIndex].getMap().getCatchablePokemon();
-                    publishProgress(new MarkerParams(location, "Scan target", 0));
-                    for (CatchablePokemon pokemon : list)
-                    {
-                        if (!pokeSet.contains(pokemon))
-                        {
-                            EncounterResult encounterResult = pokemon.encounterPokemon();
-                            String markerText = pokemon.getPokemonId().toString() + " " +
-                                    TIME_FORMAT.format(new Date(pokemon.getExpirationTimestampMs()));
-                            if (showIvs)
-                            {
-                                PokemonDataOuterClass.PokemonData pokemonData = encounterResult.getPokemonData();
-                                float ivPercent = (pokemonData.getIndividualAttack() +
-                                        pokemonData.getIndividualDefense() +
-                                        pokemonData.getIndividualStamina()) / 0.45f;
-                                markerText += String.format(" [IV:%d%%]", Math.round(ivPercent));
-                            }
-                            pokeSet.add(pokemon);
-
-                            publishProgress(new MarkerParams(
-                                    new LatLng(pokemon.getLatitude(), pokemon.getLongitude()),
-                                    markerText, pokemon.getPokemonId().getNumber()));
-                        }
-                    }
-                    try
-                    {
-                        if (credentialIndex == credentials.size() - 1)
-                        {
-                            Thread.sleep(10500);
-                        }
-                    } catch (InterruptedException e)
-                    {
-
-                    }
-                }
-            }
-            catch (RemoteServerException | AsyncPokemonGoException e)
-            {
-                return false;
-            }
-            catch (LoginFailedException e)
-            {
-                e.printStackTrace();
-                return false;
-            }
-            return true;
-        }
-
-        @Override
-        protected void onProgressUpdate(MarkerParams ... markers)
-        {
-            for (MarkerParams mParams : markers)
-            {
-                BitmapDescriptor bitmapDescriptor = null;
-                switch (mParams.type)
-                {
-                    case 0: // scan point
-                        bitmapDescriptor = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE);
-                        break;
-                    default: // pokemon
-
-                        int resId = getResources().obtainTypedArray(R.array.pokemon_resource_ids)
-                                .getResourceId(mParams.type-1, 0);
-                        Bitmap bm = BitmapFactory.decodeResource(getResources(), resId);
-                        bitmapDescriptor = BitmapDescriptorFactory.fromBitmap(bm);
-
-                        break;
-                }
-                Marker marker = mMap.addMarker(new MarkerOptions().position(mParams.position)
-                        .icon(bitmapDescriptor)
-                        .title(mParams.text));
-                markersOnMap.add(marker);
-            }
-        }
-
-        @Override
-        protected void onPostExecute(Boolean result)
-        {
-            if (result)
-            {
-                if (pokeSet.isEmpty())
-                {
-                    Toast.makeText(MapsActivity.this, "Sorry no pokemons", Toast.LENGTH_SHORT).show();
-                }
-            }
-            else
-            {
-                Toast.makeText(MapsActivity.this, "Sorry there was an error", Toast.LENGTH_SHORT).show();
-            }
-            toggleScanButton(true);
+            processBackgroundLocationScan();
         }
     }
 
-    /**
-     * Parameters for placing a marker on the map
-     */
-    private static class MarkerParams
+    @Override
+    public void onScanResult(ScanResult result)
     {
-        /** The position on the map */
-        LatLng position;
-        /** The title text to show */
-        String text;
-        /** The type of marker: 0 for a scan marker, 1-150 for a pokemon, corresponding to its id */
-        int type;
-
-        public MarkerParams(LatLng position, String text, int type)
+        for (ScanResult.MarkerParams mParams : result)
         {
-            this.position = position;
-            this.text = text;
-            this.type = type;
+            BitmapDescriptor bitmapDescriptor = null;
+            switch (mParams.type)
+            {
+                case 0: // scan point
+                    bitmapDescriptor = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE);
+                    break;
+                default: // pokemon
+
+                    int resId = getResources().obtainTypedArray(R.array.pokemon_resource_ids)
+                            .getResourceId(mParams.type-1, 0);
+                    Bitmap bm = BitmapFactory.decodeResource(getResources(), resId);
+                    bitmapDescriptor = BitmapDescriptorFactory.fromBitmap(bm);
+
+                    break;
+            }
+            Marker marker = mMap.addMarker(new MarkerOptions()
+                    .position(new LatLng(mParams.latitude, mParams.longitude))
+                    .icon(bitmapDescriptor)
+                    .title(mParams.text));
+            markersOnMap.add(marker);
         }
+    }
+
+    @Override
+    public void onScanError(String errorMessage)
+    {
+        Toast.makeText(this, errorMessage, Toast.LENGTH_SHORT).show();
+        toggleScanButton(true);
+    }
+
+    @Override
+    public void onScanComplete()
+    {
+        toggleScanButton(true);
+    }
+
+    @Override
+    public void onServiceConnected(ComponentName name, IBinder service)
+    {
+        BackgroundService.BackgroundServiceBinder binder = (BackgroundService.BackgroundServiceBinder)service;
+        backgroundService = binder.getService();
+        Log.d(TAG, "background service bound!");
+    }
+
+    @Override
+    public void onServiceDisconnected(ComponentName name)
+    {
+        backgroundService = null;
     }
 
     /**
@@ -680,5 +636,29 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
             }
         }
+    }
+
+    /**
+     * Creates the location request for the fused location API to request location updates
+     * @param interval the normal interval between location updates in ms
+     * @return the location request object
+     */
+    private static LocationRequest createLocationRequest(long interval)
+    {
+        LocationRequest locationRequest = new LocationRequest();
+        locationRequest.setInterval(interval);
+        locationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
+        locationRequest.setFastestInterval((interval * 2) / 3);
+        return locationRequest;
+    }
+
+    /**
+     * Gets the radius of the scan, based on the scanSize preference
+     * @param scanSize the scanSize preference
+     * @return the radius of the scan, in meters
+     */
+    private static double getScanRadius(int scanSize)
+    {
+        return SCAN_RADIUS * 1000 * (SCAN_PARAMETERS[scanSize][0] + 1);
     }
 }

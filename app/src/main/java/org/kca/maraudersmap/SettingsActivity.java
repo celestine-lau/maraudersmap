@@ -37,8 +37,6 @@ public class SettingsActivity extends Activity implements
         getFragmentManager().beginTransaction()
                 .replace(android.R.id.content, settingsFragment)
                 .commit();
-
-
     }
 
     @Override
@@ -47,8 +45,12 @@ public class SettingsActivity extends Activity implements
         super.onResume();
         SharedPreferences sharedPref = PreferenceManager.getDefaultSharedPreferences(this);
         sharedPref.registerOnSharedPreferenceChangeListener(this);
-        int index = Integer.parseInt(sharedPref.getString(getString(R.string.pref_scan_radius), "1"));
-        updateScanRadiusSummary(index);
+        updateListPreferenceSummary(sharedPref,
+                R.string.pref_scan_radius, R.array.pref_scan_radius_entries, R.array.pref_scan_radius_values);
+        updateListPreferenceSummary(sharedPref,
+                R.string.pref_scan_frequency, R.array.pref_scan_frequency_entries, R.array.pref_scan_frequency_values);
+        updateListPreferenceSummary(sharedPref,
+                R.string.pref_notify_pokemon_rarity, R.array.pref_pokemon_rarity_entries, R.array.pref_pokemon_rarity_values);
     }
 
     @Override
@@ -66,15 +68,37 @@ public class SettingsActivity extends Activity implements
         Preference pref = settingsFragment.findPreference(key);
         if (key.equals(getString(R.string.pref_scan_radius)))
         {
-            int index = Integer.parseInt(sharedPreferences.getString(getString(R.string.pref_scan_radius), "1"));
-            updateScanRadiusSummary(index);
+            updateListPreferenceSummary(sharedPreferences,
+                    R.string.pref_scan_radius, R.array.pref_scan_radius_entries,
+                    R.array.pref_scan_radius_values);
+        }
+        else if (key.equals(getString(R.string.pref_scan_frequency)))
+        {
+            updateListPreferenceSummary(sharedPreferences,
+                    R.string.pref_scan_frequency, R.array.pref_scan_frequency_entries,
+                    R.array.pref_scan_frequency_values);
+        }
+        else if (key.equals(getString(R.string.pref_notify_pokemon_rarity)))
+        {
+            updateListPreferenceSummary(sharedPreferences,
+                    R.string.pref_notify_pokemon_rarity, R.array.pref_pokemon_rarity_entries,
+                    R.array.pref_pokemon_rarity_values);
         }
     }
 
-    private void updateScanRadiusSummary(int scanRadius)
+    private void updateListPreferenceSummary(SharedPreferences sharedPref, int prefStrId,
+                                             int listEntryArrayId, int listValuesArrayId)
     {
-        Preference pref = settingsFragment.findPreference(getString(R.string.pref_scan_radius));
-        String[] values = getResources().getStringArray(R.array.pref_scan_radius_entries);
-        pref.setSummary(values[scanRadius]);
+        String storedVal = sharedPref.getString(getString(prefStrId), "0");
+        Preference pref = settingsFragment.findPreference(getString(prefStrId));
+        String[] entries = getResources().getStringArray(listEntryArrayId);
+        String[] values = getResources().getStringArray(listValuesArrayId);
+        for (int i = 0; i < values.length; i++)
+        {
+            if (storedVal.equals(values[i]))
+            {
+                pref.setSummary(entries[i]);
+            }
+        }
     }
 }
