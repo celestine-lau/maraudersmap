@@ -185,6 +185,7 @@ public class BackgroundService extends Service
                         }
                         if (foundPokemons.size() > 0)
                         {
+                            // Create and send notification
                             Log.d(TAG, "About to notify for " + foundPokemons);
                             String notificationText = formatPokemonFound(foundPokemons);
                             NotificationCompat.Builder mBuilder = new NotificationCompat.Builder(mContext)
@@ -481,12 +482,14 @@ public class BackgroundService extends Service
             {
                 e.printStackTrace();
                 error = "Failed to connect to server.";
+                loggedIn = false;
                 return false;
             }
             catch (LoginFailedException e)
             {
                 e.printStackTrace();
                 error = "Failed to login. Credentials provided may be invalid or banned.";
+                loggedIn = false;
                 return false;
             }
             if (scanResult.size() == 0)
