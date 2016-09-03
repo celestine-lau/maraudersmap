@@ -42,7 +42,6 @@ import android.support.v4.app.ActivityCompat;
 import android.support.v4.app.FragmentActivity;
 import android.support.v4.content.ContextCompat;
 import android.util.Log;
-import android.util.Pair;
 import android.view.View;
 import android.widget.ImageButton;
 import android.widget.Toast;
@@ -65,25 +64,15 @@ import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.pokegoapi.api.PokemonGo;
-import com.pokegoapi.api.map.pokemon.CatchablePokemon;
-import com.pokegoapi.api.map.pokemon.encounter.EncounterResult;
-import com.pokegoapi.auth.PtcCredentialProvider;
-import com.pokegoapi.exceptions.AsyncPokemonGoException;
-import com.pokegoapi.exceptions.LoginFailedException;
-import com.pokegoapi.exceptions.RemoteServerException;
 
 import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Date;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Scanner;
-import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import POGOProtos.Data.PokemonDataOuterClass;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
@@ -134,16 +123,11 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     /** The large circle indicating the range of the scan */
     private Circle locationCircle;
     private GoogleMap mMap;
-    private boolean firstScan;
-    private OkHttpClient httpClient;
-    private PokemonGo[] go;
     private GoogleApiClient googleApiClient;
     private SharedPreferences sharedPref;
     private int scanSize;
-    private boolean showIvValues;
     private boolean scanRunning;
     private ScanResult backgroundScanResult;
-    private String[] usernames, passwords;
     private PendingIntent locationRequestPendingIntent;
     private BackgroundService backgroundService;
     private CheckForUpdatesTask checkForUpdatesTask;
@@ -229,8 +213,6 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     private void init()
     {
         scanRunning = false;
-        firstScan = true;
-        scanSize = 1;
     }
 
     /**
@@ -239,16 +221,11 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
      */
     private void loadFromPreferences(SharedPreferences pref)
     {
-        String usernamesList = pref.getString(getString(R.string.pref_usernames), "");
-        String passwordsList = pref.getString(getString(R.string.pref_passwords), "");
-        usernames = usernamesList.split(" ");
-        passwords = passwordsList.split(" ");
         scanSize = Integer.parseInt(pref.getString(getString(R.string.pref_scan_radius), "1"));
         if (locationCircle != null)
         {
             locationCircle.setRadius(getScanRadius(scanSize));
         }
-        showIvValues = pref.getBoolean(getString(R.string.pref_show_ivs), false);
     }
 
     /**
@@ -293,36 +270,28 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
      */
     public void scanPressed(View v)
     {
-        if (usernames.length == 0)
+        for (Marker marker : markersOnMap)
         {
-            Toast.makeText(this, "No credentials configured!", Toast.LENGTH_SHORT).show();
+            marker.remove();
         }
-        else
+        try
         {
-            for (Marker marker : markersOnMap)
+            Location location = LocationServices.FusedLocationApi.getLastLocation(googleApiClient);
+            myLocation = new LatLng(location.getLatitude(), location.getLongitude());
+            updateLocationCircles();
+            if (backgroundService != null)
             {
-                marker.remove();
+                toggleScanButton(false);
+                Toast.makeText(this, "Scan started", Toast.LENGTH_SHORT).show();
+                backgroundService.foregroundScan(location.getLatitude(), location.getLongitude(), this);
             }
-            try
+            else
             {
-                Location location = LocationServices.FusedLocationApi.getLastLocation(googleApiClient);
-                myLocation = new LatLng(location.getLatitude(), location.getLongitude());
-                updateLocationCircles();
-                if (backgroundService != null)
-                {
-                    toggleScanButton(false);
-                    Toast.makeText(this, "Scan started", Toast.LENGTH_SHORT).show();
-                    backgroundService.foregroundScan(location.getLatitude(), location.getLongitude(), this);
-                }
-                else
-                {
-                    Toast.makeText(this, "Background service not running", Toast.LENGTH_SHORT).show();
-                }
+                Toast.makeText(this, "Background service not running", Toast.LENGTH_SHORT).show();
             }
-            catch (SecurityException e)
-            {
-
-            }
+        }
+        catch (SecurityException e)
+        {
 
         }
     }
@@ -375,6 +344,9 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         }
     }
 
+    /**
+     * Registers foreground location updates
+     */
     private void registerForegroundLocationUpdates()
     {
         if (googleApiClient.isConnected())
@@ -424,6 +396,9 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         locationCircle.setCenter(myLocation);
     }
 
+    /**
+     * Sets up the background location scan request, if background scan is enabled
+     */
     private void processBackgroundLocationScan()
     {
         if (sharedPref.getBoolean(getString(R.string.pref_background_scan), false))

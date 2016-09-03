@@ -4,16 +4,19 @@ import android.app.IntentService;
 import android.app.Notification;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
+import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
-import android.graphics.Color;
+import android.net.ConnectivityManager;
 import android.os.AsyncTask;
 import android.os.Binder;
+import android.os.Handler;
 import android.os.IBinder;
 import android.preference.PreferenceManager;
-import android.support.v4.app.TaskStackBuilder;
 import android.support.v4.app.NotificationCompat;
+import android.support.v4.app.TaskStackBuilder;
+import android.support.v4.content.ContextCompat;
 import android.util.Log;
 import android.util.Pair;
 
@@ -45,13 +48,11 @@ import POGOProtos.Enums.PokemonIdOuterClass;
 import okhttp3.OkHttpClient;
 
 /**
- * An {@link IntentService} subclass for handling asynchronous task requests in
- * a service on a separate handler thread.
- * <p/>
- * TODO: Customize class - update intent actions, extra parameters and static
- * helper methods.
+ * This service performs the Pokemon scan and notifications. It can scan in both the foreground
+ * (through being bound to the MapsActivity) and in the background (through the ACTION_LOCATION_UPDATED)
+ * intent
  */
-public class BackgroundService extends IntentService
+public class BackgroundService extends Service
 {
     /* Informs the service that the location has been updated */
     private static final String ACTION_LOCATION_UPDATED = "org.kca.maraudersmap.action.LOCATION_UPDATED";
@@ -61,7 +62,7 @@ public class BackgroundService extends IntentService
     private static final double SCAN_RADIUS = 0.07;
     private static final double KM_PER_DEGREE = 111;
     private static final String TAG = "BackgroundService";
-    private SimpleDateFormat TIME_FORMAT = new SimpleDateFormat("HH:mm:ss");
+    private static final SimpleDateFormat TIME_FORMAT = new SimpleDateFormat("HH:mm:ss");
 
     /**
      * The parameters for the scan. SCAN_PARAMETERS[i][0] represents
@@ -79,22 +80,19 @@ public class BackgroundService extends IntentService
     private OkHttpClient httpClient;
     private List<Pair<String, String>> credentials;
     private PokemonGo[] go;
+    private boolean loggedIn;
+    private Handler mHandler;
     private int[] pokemonRarities;
     private Executor exeggutor;
-    private boolean loggedIn;
     private int notificationId;
     private Context mContext;
-
-    public BackgroundService()
-    {
-        super("BackgroundService");
-    }
 
     @Override
     public void onCreate()
     {
         super.onCreate();
         mContext = getApplicationContext();
+        mHandler = new Handler();
         exeggutor = new SerialExecutor(new ThreadPoolExecutor(1, 1, 1, TimeUnit.SECONDS,
                 new ArrayBlockingQueue<Runnable>(5)));
         credentials = new ArrayList<Pair<String, String>>();
@@ -113,7 +111,6 @@ public class BackgroundService extends IntentService
      * Starts this service to perform action LocationUpdated with the given parameters. If
      * the service is already performing a task this action will be queued.
      *
-     * @see IntentService
      */
     public static void startActionLocationUpdated(Context context, double latitude, double longitude)
     {
@@ -125,8 +122,9 @@ public class BackgroundService extends IntentService
     }
 
     @Override
-    protected void onHandleIntent(Intent intent)
+    public int onStartCommand(Intent intent, int flags, int startId)
     {
+        super.onStartCommand(intent, flags, startId);
         if (intent != null)
         {
             final String action = intent.getAction();
@@ -134,95 +132,104 @@ public class BackgroundService extends IntentService
             {
                 final double latitude = intent.getDoubleExtra(EXTRA_LATITUDE, 0);
                 final double longitude = intent.getDoubleExtra(EXTRA_LONGITUDE, 0);
-                SharedPreferences sharedPref = PreferenceManager.getDefaultSharedPreferences(mContext);
-                boolean doScan = sharedPref.getBoolean(mContext.getString(R.string.pref_background_scan), false);
-                if (doScan)
-                {
-                    backgroundScan(latitude, longitude);
-                }
+                backgroundScan(latitude, longitude);
             }
         }
+        return START_STICKY;
     }
 
     /**
-     * Handle the location updated action
+     * Performs a background scan. This method first checks if background scan is enabled and if
+     * network connectivity is present. Subsequently it scans for Pokemon, filters it by rarity, and
+     * notifies the user if any pokemon of the specified rarity is found
      * @param latitude the updated latitude
      * @param longitude the updated longitude
      */
     private void backgroundScan(final double latitude, final double longitude)
     {
         exeggutor.execute(
-                new Runnable()
+            new Runnable()
+            {
+                @Override
+                public void run()
                 {
-                    @Override
-                    public void run()
+                    SharedPreferences sharedPref = PreferenceManager.getDefaultSharedPreferences(mContext);
+                    boolean doScan = sharedPref.getBoolean(mContext.getString(R.string.pref_background_scan), false);
+                    if (!doScan)
                     {
-                        Log.d(TAG, "background scan starting");
-                        String startTimeStr = Calendar.getInstance().getTime().toString();
-                        SharedPreferences sharedPref = PreferenceManager.getDefaultSharedPreferences(mContext);
-                        ScanPokemonTask task = new ScanPokemonTask(mContext);
-                        boolean res = task.performScan(latitude, longitude);
-                        if (res)
+                        return;
+                    }
+                    ConnectivityManager connectivityManager = (ConnectivityManager)getSystemService(CONNECTIVITY_SERVICE);
+                    if (connectivityManager.getActiveNetworkInfo() == null ||
+                            !connectivityManager.getActiveNetworkInfo().isConnected())
+                    {
+                        return;
+                    }
+                    Log.d(TAG, "background scan starting");
+                    String startTimeStr = Calendar.getInstance().getTime().toString();
+                    ScanPokemonTask task = new ScanPokemonTask(mContext);
+                    boolean res = task.performScan(latitude, longitude);
+                    if (res)
+                    {
+                        ScanResult scanResult = task.getResult();
+                        ArrayList<String> foundPokemons = new ArrayList<String>();
+                        int minRarity = Integer.parseInt(PreferenceManager.getDefaultSharedPreferences(mContext)
+                                .getString(mContext.getString(R.string.pref_notify_pokemon_rarity),
+                                        mContext.getString(R.string.pref_notify_pokemon_rarity_default)));
+                        for (ScanResult.MarkerParams markerParams : scanResult)
                         {
-                            ScanResult scanResult = task.getResult();
-                            ArrayList<String> foundPokemons = new ArrayList<String>();
-                            int minRarity = Integer.parseInt(PreferenceManager.getDefaultSharedPreferences(mContext)
-                                    .getString(mContext.getString(R.string.pref_notify_pokemon_rarity),
-                                            mContext.getString(R.string.pref_notify_pokemon_rarity_default)));
-                            for (ScanResult.MarkerParams markerParams : scanResult)
+                            if (pokemonRarities[markerParams.type] >= minRarity)
                             {
-                                if (pokemonRarities[markerParams.type] >= minRarity)
-                                {
-                                    foundPokemons.add(PokemonIdOuterClass.PokemonId.forNumber(markerParams.type).toString());
-                                }
+                                foundPokemons.add(PokemonIdOuterClass.PokemonId.forNumber(markerParams.type).toString());
                             }
-                            if (foundPokemons.size() > 0)
-                            {
-                                Log.d(TAG, "About to notify for " + foundPokemons);
-                                String notificationText = formatPokemonFound(foundPokemons);
-                                NotificationCompat.Builder mBuilder =
-                                        new NotificationCompat.Builder(mContext)
-                                                .setSmallIcon(R.drawable.notification_icon)
-                                                .setContentTitle("Pokemon found")
-                                                .setContentText(notificationText)
-                                                .setPriority(Notification.PRIORITY_DEFAULT)
-                                                .setCategory(Notification.CATEGORY_EVENT)
-                                                .setColor(Color.argb(255, 248, 137, 16))
-                                                .setLights(Color.argb(255, 248, 137, 16), 1000, 1000)
-                                                .setVibrate(new long[] {100, 1000})
-                                                .setAutoCancel(true);
-                                Intent notifyIntent = new Intent(mContext, MapsActivity.class);
-                                TaskStackBuilder stackBuilder = TaskStackBuilder.create(mContext);
-                                stackBuilder.addParentStack(MapsActivity.class);
-                                stackBuilder.addNextIntent(notifyIntent);
-                                notifyIntent.putExtra(MapsActivity.EXTRA_SCAN_RESULT, scanResult);
-                                PendingIntent resultPendingIntent =
-                                        stackBuilder.getPendingIntent(
-                                                0,
-                                                PendingIntent.FLAG_UPDATE_CURRENT
-                                        );
+                        }
+                        if (foundPokemons.size() > 0)
+                        {
+                            Log.d(TAG, "About to notify for " + foundPokemons);
+                            String notificationText = formatPokemonFound(foundPokemons);
+                            NotificationCompat.Builder mBuilder = new NotificationCompat.Builder(mContext)
+                                .setSmallIcon(R.drawable.notification_icon)
+                                .setContentTitle("Pokemon found")
+                                .setContentText(notificationText)
+                                .setPriority(Notification.PRIORITY_DEFAULT)
+                                .setCategory(Notification.CATEGORY_EVENT)
+                                    .setColor(ContextCompat.getColor(mContext, R.color.colorNotificationLight))
+                                    .setLights(ContextCompat.getColor(mContext, R.color.colorNotificationLight), 1000, 1000)
+                                    .setVibrate(new long[]{100, 1000})
+                                    .setAutoCancel(true);
+                            Intent notifyIntent = new Intent(mContext, MapsActivity.class);
+                            TaskStackBuilder stackBuilder = TaskStackBuilder.create(mContext);
+                            stackBuilder.addParentStack(MapsActivity.class);
+                            stackBuilder.addNextIntent(notifyIntent);
+                            notifyIntent.putExtra(MapsActivity.EXTRA_SCAN_RESULT, scanResult);
+                            PendingIntent resultPendingIntent =
+                                    stackBuilder.getPendingIntent(
+                                            0,
+                                            PendingIntent.FLAG_UPDATE_CURRENT
+                                    );
 
-                                mBuilder.setContentIntent(resultPendingIntent);
-                                NotificationManager notificationManager =
-                                        (NotificationManager)getSystemService(Context.NOTIFICATION_SERVICE);
-                                notificationManager.notify(notificationId, mBuilder.build());
-                            }
-                            else
-                            {
-                                Log.d(TAG, "Background scan started at " + startTimeStr +
-                                        " completed but there was no pokemons");
-                            }
+                            mBuilder.setContentIntent(resultPendingIntent);
+                            NotificationManager notificationManager =
+                                    (NotificationManager)getSystemService(Context.NOTIFICATION_SERVICE);
+                            notificationManager.notify(notificationId, mBuilder.build());
                         }
                         else
                         {
-                            Log.d(TAG, "Background scan started at " + startTimeStr +
-                                    " completed but there was an error: " + task.getError());
+                            Log.w(TAG, "Background scan started at " + startTimeStr +
+                                    " completed but there was no pokemons");
                         }
-                        SharedPreferences.Editor editor = sharedPref.edit();
-                        editor.putLong(mContext.getString(R.string.pref_last_scan), System.currentTimeMillis());
-                        editor.commit();
                     }
+                    else
+                    {
+                        final String errorMsg = "Background scan started at " + startTimeStr +
+                                " completed but there was an error: " + task.getError();
+                        Log.w(TAG, errorMsg);
+                    }
+                    SharedPreferences.Editor editor = sharedPref.edit();
+                    editor.putLong(mContext.getString(R.string.pref_last_scan), System.currentTimeMillis());
+                    editor.commit();
                 }
+            }
         );
     }
 
@@ -266,6 +273,11 @@ public class BackgroundService extends IntentService
         }
     }
 
+    /**
+     * Converts a string so that only the first letter is capitalized
+     * @param s the string to convert
+     * @return the string with initial uppercase
+     */
     private static String initialUppercase(String s)
     {
         if (s.length() > 0)
@@ -278,6 +290,10 @@ public class BackgroundService extends IntentService
         }
     }
 
+    /**
+     * A simple binder class that returns the BackgroundService object for direct public method
+     * calls.
+     */
     public class BackgroundServiceBinder extends Binder
     {
         /**
@@ -387,9 +403,17 @@ public class BackgroundService extends IntentService
             }
             try
             {
+                if (httpClient == null)
+                {
+                    httpClient = new OkHttpClient.Builder()
+                                    .connectTimeout(0, TimeUnit.SECONDS)
+                                    .readTimeout(30, TimeUnit.SECONDS)
+                                    .writeTimeout(30, TimeUnit.SECONDS)
+                                    .build();
+                }
+
                 if (!loggedIn)
                 {
-                    httpClient = new OkHttpClient();
                     go = new PokemonGo[credentials.size()];
                     for (int i = 0; i < credentials.size(); i++)
                     {
@@ -399,6 +423,7 @@ public class BackgroundService extends IntentService
                         go[i] = new PokemonGo(httpClient);
                         go[i].login(ptcCredentialProvider);
                     }
+                    loggedIn = true;
                 }
                 else
                 {
@@ -455,7 +480,7 @@ public class BackgroundService extends IntentService
             catch (RemoteServerException | AsyncPokemonGoException e)
             {
                 e.printStackTrace();
-                error = "Remote server error";
+                error = "Failed to connect to server.";
                 return false;
             }
             catch (LoginFailedException e)
@@ -472,11 +497,19 @@ public class BackgroundService extends IntentService
             return true;
         }
 
+        /**
+         * Gets the result of the scan
+         * @return the scan result
+         */
         public ScanResult getResult()
         {
             return scanResult;
         }
 
+        /**
+         * Gets the error message if the scan failed
+         * @return the error message, if any
+         */
         public String getError()
         {
             return error;
@@ -524,6 +557,9 @@ public class BackgroundService extends IntentService
 
     }
 
+    /**
+     * This Executor executes tasks in a serial fashion.
+     */
     private static class SerialExecutor implements Executor
     {
         final Queue<Runnable> tasks = new ArrayDeque<>();

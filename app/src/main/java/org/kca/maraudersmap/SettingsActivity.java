@@ -19,8 +19,13 @@
 package org.kca.maraudersmap;
 
 import android.app.Activity;
+import android.app.AlertDialog;
+import android.content.DialogInterface;
 import android.content.SharedPreferences;
+import android.os.Build;
 import android.os.Bundle;
+import android.os.PowerManager;
+import android.preference.CheckBoxPreference;
 import android.preference.Preference;
 import android.preference.PreferenceManager;
 
@@ -65,7 +70,7 @@ public class SettingsActivity extends Activity implements
     @Override
     public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, String key)
     {
-        Preference pref = settingsFragment.findPreference(key);
+        final Preference pref = settingsFragment.findPreference(key);
         if (key.equals(getString(R.string.pref_scan_radius)))
         {
             updateListPreferenceSummary(sharedPreferences,
@@ -86,6 +91,13 @@ public class SettingsActivity extends Activity implements
         }
     }
 
+    /**
+     * Updates the summary text of a list preference
+     * @param sharedPref the shared preferences object
+     * @param prefStrId the string resource id of the preference
+     * @param listEntryArrayId the array resource id of the list entries
+     * @param listValuesArrayId the array resource id of the list values
+     */
     private void updateListPreferenceSummary(SharedPreferences sharedPref, int prefStrId,
                                              int listEntryArrayId, int listValuesArrayId)
     {
