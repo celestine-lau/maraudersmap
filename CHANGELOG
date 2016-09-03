@@ -1,3 +1,9 @@
+v0.3-alpha (2/9/2016)
+The app now supports foreground and background scanning.
+- For foreground scanning, fixed bug where starting a scan may not always scan at the present location
+- Background scanning implemented. Enable it in settings and configure Scan Frequency and Notify on Pokemon Rarity.
+- Note that Pokemon rarity is hardcoded for now.
+
 v0.22-alpha (31/08/2016)
 - Bugfix for #5 (App crashes on Android 4.4.2)
 - Support Samsung multi-window mode
