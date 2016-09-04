@@ -42,6 +42,10 @@ import android.support.v4.app.ActivityCompat;
 import android.support.v4.app.FragmentActivity;
 import android.support.v4.content.ContextCompat;
 import android.util.Log;
+import android.view.ActionMode;
+import android.view.Menu;
+import android.view.MenuInflater;
+import android.view.MenuItem;
 import android.view.View;
 import android.widget.ImageButton;
 import android.widget.Toast;
@@ -63,7 +67,6 @@ import com.google.android.gms.maps.model.CircleOptions;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
-import com.pokegoapi.api.PokemonGo;
 
 import java.io.IOException;
 import java.text.SimpleDateFormat;
@@ -85,7 +88,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         LocationListener,
         SharedPreferences.OnSharedPreferenceChangeListener,
         ScanListener,
-        ServiceConnection
+        ServiceConnection, ActionMode.Callback
 {
     private static final String TAG = "MapsActivity";
     private static final Pattern GITHUB_RELEASE_REGEX = Pattern.compile("/tree/(.+?)\"");
@@ -257,6 +260,17 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                 .strokeColor(Color.RED)
                 .visible(true);
         locationCircle = mMap.addCircle(copt);
+        mMap.setOnMapLongClickListener(new GoogleMap.OnMapLongClickListener() {
+            @Override
+            public void onMapLongClick(LatLng latLng) {
+                Marker selectedLoc = mMap.addMarker(
+                        new MarkerOptions()
+                                .position(new LatLng(latLng.latitude, latLng.longitude))
+                                .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE))
+                                .title("Scan target"));
+                startActionMode(MapsActivity.this);
+            }
+        });
         if (backgroundScanResult != null)
         {
             onScanResult(backgroundScanResult);
@@ -524,6 +538,30 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     public void onServiceDisconnected(ComponentName name)
     {
         backgroundService = null;
+    }
+
+    public boolean onCreateActionMode(ActionMode actionMode, Menu menu) {
+        // Inflate a menu resource providing context menu items
+        MenuInflater inflater = actionMode.getMenuInflater();
+        inflater.inflate(R.menu.menus, menu);
+//        return super.onCreateOptionsMenu(menu);
+        return true;
+    }
+
+    @Override
+    public boolean onPrepareActionMode(ActionMode actionMode, Menu menu) {
+        return false; // Return false if nothing is done
+    }
+
+    @Override
+    public boolean onActionItemClicked(ActionMode actionMode, MenuItem menuItem) {
+        scanPressed(null);
+        return true;
+    }
+
+    @Override
+    public void onDestroyActionMode(ActionMode actionMode) {
+
     }
 
     /**
