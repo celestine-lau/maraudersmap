@@ -37,5 +37,6 @@
     <string name="pref_last_scan">lastScanMillis</string>
     <string name="power_saving_warning_title">Power Saving On</string>
     <string name="power_saving_warning_message">Background scan will not work if power saving is on. Turn off power saving first.</string>
+    <string name="select_loc">Start scan here</string>
 
 </resources>
